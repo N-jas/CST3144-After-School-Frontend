@@ -51,7 +51,7 @@ const myApp = Vue.createApp({
         this.loading = true;
         this.loadError = "";
 
-        return fetch("http://localhost:3000/lessons")
+        return fetch("http://localhost:3001/lessons")
                 .then(function(response) {
                     if (!response.ok) {
                         throw new Error("Could not load lessons.");
