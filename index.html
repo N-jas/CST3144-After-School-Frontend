@@ -129,12 +129,21 @@
             </button>
         </form>
 
+        <button
+            type="button"
+            v-if="submittedOrderId !== ''"
+            v-bind:disabled="isSubmitting"
+            v-on:click="completeSavedOrder"
+        >
+            Retry Availability Update
+        </button>
+
         <p role="status">{{ orderMessage }}</p>
     </div>
 </div>
 
     <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.js"></script>
-    <script src="app.js"></script>
+    <script src="app.js?v=2"></script>
 
 </body>
 </html>

@@ -1,3 +1,5 @@
+console.log("UPDATED CHECKOUT APP LOADED");
+
 const API_URL =
     "https://cst3144-after-school-backend-m01018927.onrender.com";
 
@@ -133,6 +135,64 @@ const myApp = Vue.createApp({
             }
         },
 
+        async completeSavedOrder() {
+    if (this.submittedOrderId === "") {
+        return;
+    }
+
+    this.isSubmitting = true;
+
+    const orderId = this.submittedOrderId;
+
+    try {
+        // Update each different lesson only once.
+        const lessonIds = [...new Set(this.cart)];
+
+        for (const lessonId of lessonIds) {
+            const lesson = this.getLesson(lessonId);
+
+            const response = await fetch(
+                API_URL + "/lessons/" + lessonId,
+                {
+                    method: "PUT",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        space: lesson.spaces
+                    })
+                }
+            );
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    result.error || "Unable to update lesson spaces."
+                );
+            }
+        }
+
+        // Clear the cart only after every update succeeds.
+        this.cart = [];
+        this.customerName = "";
+        this.customerPhone = "";
+        this.submittedOrderId = "";
+
+        this.orderMessage =
+            "Order completed successfully! Reference: " + orderId;
+    } catch (error) {
+        this.orderMessage =
+            "Order " + orderId +
+            " was saved, but availability updates are incomplete. " +
+            "Click Retry Availability Update.";
+
+        console.error("Availability update error:", error);
+    } finally {
+        this.isSubmitting = false;
+    }
+},
+
         async checkout() {
             if (!this.canCheckout) {
                 return;
@@ -184,9 +244,8 @@ const myApp = Vue.createApp({
 
                 this.submittedOrderId = result.orderId;
 
-                this.orderMessage =
-                    "Order submitted successfully! Reference: " +
-                    result.orderId;
+                await this.completeSavedOrder();
+
             } catch (error) {
                 this.orderMessage = error.message;
                 console.error("Checkout error:", error);
