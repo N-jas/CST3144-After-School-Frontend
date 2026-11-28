@@ -63,6 +63,9 @@ const myApp = Vue.createApp({
     },
 
     methods: {
+        lessonImageUrl(imagePath) {
+        return API_URL + imagePath;
+    },
         fetchLessons() {
             this.loading = true;
             this.loadError = "";

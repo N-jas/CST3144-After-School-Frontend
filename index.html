@@ -47,6 +47,12 @@
 
     <!-- Your lesson loop goes below these controls. -->
         <div v-for="lesson in sortedLessons" :key="lesson.id">
+            <img
+                v-if="lesson.image"
+                v-bind:src="lessonImageUrl(lesson.image)"
+                v-bind:alt="lesson.subject + ' lesson'"
+                class="lesson-image"
+            >
             <h2>
                 <i
                     class="fa"
