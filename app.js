@@ -1,5 +1,3 @@
-console.log("UPDATED CHECKOUT APP LOADED");
-
 const API_URL =
     "https://cst3144-after-school-backend-m01018927.onrender.com";
 
@@ -8,15 +6,23 @@ const myApp = Vue.createApp({
         return {
             sitename: "After School Activities",
             showLessons: true,
+
+            lessons: [],
             cart: [],
+            loading: true,
+            loadError: "",
+
             sortBy: "subject",
             sortOrder: "ascending",
+
+            searchText: "",
+            searchResultIds: null,
+            isSearching: false,
+            searchError: "",
+
             customerName: "",
             customerPhone: "",
             orderMessage: "",
-            lessons: [],
-            loading: true,
-            loadError: "",
             isSubmitting: false,
             submittedOrderId: ""
         };
@@ -32,7 +38,13 @@ const myApp = Vue.createApp({
             const direction =
                 this.sortOrder === "ascending" ? 1 : -1;
 
-            return [...this.lessons].sort(function(a, b) {
+            const visibleLessons = this.searchResultIds === null
+                ? this.lessons
+                : this.lessons.filter((lesson) => {
+                    return this.searchResultIds.includes(lesson.id);
+                });
+
+            return [...visibleLessons].sort(function(a, b) {
                 if (typeof a[attribute] === "string") {
                     return a[attribute].localeCompare(
                         b[attribute]
@@ -64,8 +76,9 @@ const myApp = Vue.createApp({
 
     methods: {
         lessonImageUrl(imagePath) {
-        return API_URL + imagePath;
-    },
+            return API_URL + imagePath;
+        },
+
         fetchLessons() {
             this.loading = true;
             this.loadError = "";
@@ -96,6 +109,56 @@ const myApp = Vue.createApp({
                 .finally(() => {
                     this.loading = false;
                 });
+        },
+
+        async searchLessons() {
+            if (this.loading || this.isSearching) {
+                return;
+            }
+
+            this.isSearching = true;
+            this.searchError = "";
+
+            const query = this.searchText.trim();
+
+            try {
+                const response = await fetch(
+                    API_URL + "/lessons?q=" +
+                    encodeURIComponent(query)
+                );
+
+                if (!response.ok) {
+                    throw new Error("Unable to search lessons.");
+                }
+
+                const results = await response.json();
+
+                if (!Array.isArray(results)) {
+                    throw new Error("Invalid search response.");
+                }
+
+                // Keep the full lesson array for cart lookups.
+                this.searchResultIds = query === ""
+                    ? null
+                    : results.map(function(lesson) {
+                        return lesson.id;
+                    });
+            } catch (error) {
+                this.searchError = error.message;
+                console.error("Search error:", error);
+            } finally {
+                this.isSearching = false;
+            }
+        },
+
+        clearSearch() {
+            if (this.isSearching) {
+                return;
+            }
+
+            this.searchText = "";
+            this.searchResultIds = null;
+            this.searchError = "";
         },
 
         addToCart(lesson) {
@@ -139,62 +202,72 @@ const myApp = Vue.createApp({
         },
 
         async completeSavedOrder() {
-    if (this.submittedOrderId === "") {
-        return;
-    }
-
-    this.isSubmitting = true;
-
-    const orderId = this.submittedOrderId;
-
-    try {
-        // Update each different lesson only once.
-        const lessonIds = [...new Set(this.cart)];
-
-        for (const lessonId of lessonIds) {
-            const lesson = this.getLesson(lessonId);
-
-            const response = await fetch(
-                API_URL + "/lessons/" + lessonId,
-                {
-                    method: "PUT",
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({
-                        space: lesson.spaces
-                    })
-                }
-            );
-
-            const result = await response.json();
-
-            if (!response.ok) {
-                throw new Error(
-                    result.error || "Unable to update lesson spaces."
-                );
+            if (this.submittedOrderId === "") {
+                return;
             }
-        }
 
-        // Clear the cart only after every update succeeds.
-        this.cart = [];
-        this.customerName = "";
-        this.customerPhone = "";
-        this.submittedOrderId = "";
+            this.isSubmitting = true;
 
-        this.orderMessage =
-            "Order completed successfully! Reference: " + orderId;
-    } catch (error) {
-        this.orderMessage =
-            "Order " + orderId +
-            " was saved, but availability updates are incomplete. " +
-            "Click Retry Availability Update.";
+            const orderId = this.submittedOrderId;
 
-        console.error("Availability update error:", error);
-    } finally {
-        this.isSubmitting = false;
-    }
-},
+            try {
+                // Update each different lesson only once.
+                const lessonIds = [...new Set(this.cart)];
+
+                for (const lessonId of lessonIds) {
+                    const lesson = this.getLesson(lessonId);
+
+                    if (!lesson) {
+                        throw new Error(
+                            "Lesson details are missing for ID " + lessonId
+                        );
+                    }
+
+                    const response = await fetch(
+                        API_URL + "/lessons/" + lessonId,
+                        {
+                            method: "PUT",
+                            headers: {
+                                "Content-Type": "application/json"
+                            },
+                            body: JSON.stringify({
+                                space: lesson.spaces
+                            })
+                        }
+                    );
+
+                    const result = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(
+                            result.error ||
+                            "Unable to update lesson spaces."
+                        );
+                    }
+                }
+
+                // Clear only after all availability updates succeed.
+                this.cart = [];
+                this.customerName = "";
+                this.customerPhone = "";
+                this.submittedOrderId = "";
+
+                // Previous availability search results may be outdated.
+                this.clearSearch();
+
+                this.orderMessage =
+                    "Order completed successfully! Reference: " + orderId;
+            } catch (error) {
+                this.orderMessage =
+                    "Order " + orderId +
+                    " was saved, but availability updates are incomplete. " +
+                    "Click Retry Availability Update.";
+
+                console.error("Availability update error:", error);
+            } finally {
+                this.isSubmitting = false;
+            }
+        },
 
         async checkout() {
             if (!this.canCheckout) {
@@ -248,7 +321,6 @@ const myApp = Vue.createApp({
                 this.submittedOrderId = result.orderId;
 
                 await this.completeSavedOrder();
-
             } catch (error) {
                 this.orderMessage = error.message;
                 console.error("Checkout error:", error);

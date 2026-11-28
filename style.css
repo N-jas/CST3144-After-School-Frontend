@@ -173,3 +173,13 @@ hr {
     border-radius: 10px;
     margin-bottom: 16px;
 }
+
+.search-form {
+    max-width: 100%;
+    margin-bottom: 24px;
+}
+
+.search-form button {
+    width: auto;
+    margin-right: 8px;
+}

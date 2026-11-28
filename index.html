@@ -5,151 +5,231 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <title>After School Activities</title>
-    <link 
+
+    <link
         rel="stylesheet"
         href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css"
     >
-    <link rel="stylesheet" href="style.css?v=2">
-</head>
 
+    <link rel="stylesheet" href="style.css?v=3">
+</head>
 
 <body>
     <div id="app">
-    <h1>{{ sitename }}</h1>
-
-    <button
-        v-on:click="toggleCart"
-        v-bind:disabled="showLessons && cart.length === 0"
-    >
-        {{ showLessons ? 'Shopping Cart (' + cart.length + ')' : 'Back to Lessons' }}
-    </button>
-
-    <!-- Lessons view -->
-    <div v-if="showLessons">
-        <p v-if="loading">Loading lessons...</p>
-        <p v-if="loadError" role="alert">{{ loadError }}</p>
-
-        <label for="sort-by">Sort by:</label>
-
-        <select id="sort-by" v-model="sortBy">
-            <option value="subject">Subject</option>
-            <option value="location">Location</option>
-            <option value="price">Price</option>
-            <option value="spaces">Spaces</option>
-        </select>
-
-        <label for="sort-order">Order:</label>
-
-        <select id="sort-order" v-model="sortOrder">
-            <option value="ascending">Ascending</option>
-            <option value="descending">Descending</option>
-        </select>
-
-    <!-- Your lesson loop goes below these controls. -->
-        <div v-for="lesson in sortedLessons" :key="lesson.id">
-            <img
-                v-if="lesson.image"
-                v-bind:src="lessonImageUrl(lesson.image)"
-                v-bind:alt="lesson.subject + ' lesson'"
-                class="lesson-image"
-            >
-            <h2>
-                <i
-                    class="fa"
-                    :class="lesson.icon"
-                    aria-hidden="true"
-                ></i>
-
-                {{ lesson.subject }}
-            </h2>
-
-            <p>Location: {{ lesson.location }}</p>
-            <p>Price: Rs {{ lesson.price }}</p>
-            <p>Available spaces: {{ lesson.spaces }}</p>
-
-            <button
-                v-on:click="addToCart(lesson)"
-                v-bind:disabled="lesson.spaces === 0"
-            >
-                Add to Cart
-            </button>
-
-            <hr>
-        </div>
-    </div>
-
-    <!-- Shopping cart view -->
-    <div v-else>
-        <h2>Your Shopping Cart</h2>
-
-        <p v-if="cart.length === 0">Your cart is empty.</p>
-
-        <div v-for="(lessonId, index) in cart" :key="index">
-            <h3>{{ getLesson(lessonId).subject }}</h3>
-
-            <p>Location: {{ getLesson(lessonId).location }}</p>
-            <p>Price: Rs {{ getLesson(lessonId).price }}</p>
-            <p>Spaces booked: 1</p>
-
-            <button v-on:click="removeFromCart(index)">
-                Remove
-            </button>
-
-            <hr>
-        </div>
-
-        <h2>Checkout</h2>
-
-        <form v-on:submit.prevent="checkout">
-            <p>
-                <label for="customer-name">Name:</label>
-                <input
-                    id="customer-name"
-                    type="text"
-                    v-model="customerName"
-                    autocomplete="name"
-                >
-            </p>
-
-            <p v-if="customerName !== '' && !validName">
-                Enter a name using letters and spaces between words only.
-            </p>
-
-            <p>
-                <label for="customer-phone">Phone:</label>
-                <input
-                    id="customer-phone"
-                    type="text"
-                    inputmode="numeric"
-                    v-model="customerPhone"
-                    autocomplete="tel"
-                >
-            </p>
-
-            <p v-if="customerPhone !== '' && !validPhone">
-                Enter a phone number using digits only.
-            </p>
-
-            <button type="submit" v-bind:disabled="!canCheckout">
-                {{ isSubmitting ? 'Submitting...' : 'Checkout' }}
-            </button>
-        </form>
+        <h1>{{ sitename }}</h1>
 
         <button
             type="button"
-            v-if="submittedOrderId !== ''"
-            v-bind:disabled="isSubmitting"
-            v-on:click="completeSavedOrder"
+            v-on:click="toggleCart"
+            v-bind:disabled="showLessons && cart.length === 0"
         >
-            Retry Availability Update
+            {{ showLessons
+                ? 'Shopping Cart (' + cart.length + ')'
+                : 'Back to Lessons'
+            }}
         </button>
 
-        <p role="status">{{ orderMessage }}</p>
+        <!-- Lessons view -->
+        <div v-if="showLessons">
+            <p v-if="loading">Loading lessons...</p>
+
+            <p v-if="loadError" role="alert">
+                {{ loadError }}
+            </p>
+
+            <!-- Backend search -->
+            <form
+                class="search-form"
+                v-on:submit.prevent="searchLessons"
+            >
+                <label for="lesson-search">Search lessons</label>
+
+                <input
+                    id="lesson-search"
+                    type="search"
+                    v-model="searchText"
+                    placeholder="Subject, location, price or spaces"
+                    v-bind:disabled="loading || isSearching"
+                >
+
+                <button
+                    type="submit"
+                    v-bind:disabled="loading || isSearching"
+                >
+                    {{ isSearching ? 'Searching...' : 'Search' }}
+                </button>
+
+                <button
+                    type="button"
+                    v-on:click="clearSearch"
+                    v-bind:disabled="isSearching"
+                >
+                    Clear Search
+                </button>
+            </form>
+
+            <p v-if="searchError" role="alert">
+                {{ searchError }}
+            </p>
+
+            <!-- Sorting controls -->
+            <label for="sort-by">Sort by:</label>
+
+            <select id="sort-by" v-model="sortBy">
+                <option value="subject">Subject</option>
+                <option value="location">Location</option>
+                <option value="price">Price</option>
+                <option value="spaces">Spaces</option>
+            </select>
+
+            <label for="sort-order">Order:</label>
+
+            <select id="sort-order" v-model="sortOrder">
+                <option value="ascending">Ascending</option>
+                <option value="descending">Descending</option>
+            </select>
+
+            <p
+                v-if="!loading && !isSearching && !loadError &&
+                      !searchError && sortedLessons.length === 0"
+            >
+                No matching lessons found.
+            </p>
+
+            <!-- Lesson list -->
+            <div
+                v-for="lesson in sortedLessons"
+                :key="lesson.id"
+            >
+                <img
+                    v-if="lesson.image"
+                    v-bind:src="lessonImageUrl(lesson.image)"
+                    v-bind:alt="lesson.subject + ' lesson'"
+                    class="lesson-image"
+                >
+
+                <h2>
+                    <i
+                        class="fa"
+                        :class="lesson.icon"
+                        aria-hidden="true"
+                    ></i>
+
+                    {{ lesson.subject }}
+                </h2>
+
+                <p>Location: {{ lesson.location }}</p>
+                <p>Price: Rs {{ lesson.price }}</p>
+                <p>Available spaces: {{ lesson.spaces }}</p>
+
+                <button
+                    type="button"
+                    v-on:click="addToCart(lesson)"
+                    v-bind:disabled="lesson.spaces <= 0 ||
+                                     isSubmitting ||
+                                     submittedOrderId !== ''"
+                >
+                    Add to Cart
+                </button>
+
+                <hr>
+            </div>
+        </div>
+
+        <!-- Shopping cart view -->
+        <div v-else>
+            <h2>Your Shopping Cart</h2>
+
+            <p v-if="cart.length === 0">Your cart is empty.</p>
+
+            <div
+                v-for="(lessonId, index) in cart"
+                :key="index"
+            >
+                <h3>{{ getLesson(lessonId).subject }}</h3>
+
+                <p>
+                    Location: {{ getLesson(lessonId).location }}
+                </p>
+
+                <p>
+                    Price: Rs {{ getLesson(lessonId).price }}
+                </p>
+
+                <p>Spaces booked: 1</p>
+
+                <button
+                    type="button"
+                    v-on:click="removeFromCart(index)"
+                    v-bind:disabled="isSubmitting ||
+                                     submittedOrderId !== ''"
+                >
+                    Remove
+                </button>
+
+                <hr>
+            </div>
+
+            <h2>Checkout</h2>
+
+            <form v-on:submit.prevent="checkout">
+                <p>
+                    <label for="customer-name">Name:</label>
+
+                    <input
+                        id="customer-name"
+                        type="text"
+                        v-model="customerName"
+                        autocomplete="name"
+                        v-bind:disabled="isSubmitting ||
+                                         submittedOrderId !== ''"
+                    >
+                </p>
+
+                <p v-if="customerName !== '' && !validName">
+                    Enter a name using letters and spaces between words only.
+                </p>
+
+                <p>
+                    <label for="customer-phone">Phone:</label>
+
+                    <input
+                        id="customer-phone"
+                        type="text"
+                        inputmode="numeric"
+                        v-model="customerPhone"
+                        autocomplete="tel"
+                        v-bind:disabled="isSubmitting ||
+                                         submittedOrderId !== ''"
+                    >
+                </p>
+
+                <p v-if="customerPhone !== '' && !validPhone">
+                    Enter a phone number using digits only.
+                </p>
+
+                <button
+                    type="submit"
+                    v-bind:disabled="!canCheckout"
+                >
+                    {{ isSubmitting ? 'Submitting...' : 'Checkout' }}
+                </button>
+            </form>
+
+            <button
+                type="button"
+                v-if="submittedOrderId !== ''"
+                v-bind:disabled="isSubmitting"
+                v-on:click="completeSavedOrder"
+            >
+                Retry Availability Update
+            </button>
+
+            <p role="status">{{ orderMessage }}</p>
+        </div>
     </div>
-</div>
 
     <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.js"></script>
-    <script src="app.js?v=2"></script>
-
+    <script src="app.js?v=3"></script>
 </body>
 </html>
