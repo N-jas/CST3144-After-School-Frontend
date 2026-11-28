@@ -1,3 +1,6 @@
+const API_URL =
+    "https://cst3144-after-school-backend-m01018927.onrender.com";
+
 const myApp = Vue.createApp({
     data() {
         return {
@@ -11,7 +14,9 @@ const myApp = Vue.createApp({
             orderMessage: "",
             lessons: [],
             loading: true,
-            loadError: ""  
+            loadError: "",
+            isSubmitting: false,
+            submittedOrderId: ""
         };
     },
 
@@ -22,36 +27,45 @@ const myApp = Vue.createApp({
     computed: {
         sortedLessons() {
             const attribute = this.sortBy;
-            const direction = this.sortOrder === "ascending" ? 1 : -1;
+            const direction =
+                this.sortOrder === "ascending" ? 1 : -1;
 
             return [...this.lessons].sort(function(a, b) {
                 if (typeof a[attribute] === "string") {
-                    return a[attribute].localeCompare(b[attribute]) * direction;
+                    return a[attribute].localeCompare(
+                        b[attribute]
+                    ) * direction;
                 }
 
                 return (a[attribute] - b[attribute]) * direction;
             });
+        },
+
+        validName() {
+            return /^[A-Za-z]+(?: [A-Za-z]+)*$/.test(
+                this.customerName.trim()
+            );
+        },
+
+        validPhone() {
+            return /^[0-9]+$/.test(this.customerPhone);
+        },
+
+        canCheckout() {
+            return this.validName &&
+                this.validPhone &&
+                this.cart.length > 0 &&
+                !this.isSubmitting &&
+                this.submittedOrderId === "";
         }
-    },
-
-    validName() {
-        return /^[A-Za-z]+(?: [A-Za-z]+)*$/.test(this.customerName.trim());
-    },
-
-    validPhone() {
-        return /^[0-9]+$/.test(this.customerPhone);
-    },
-
-    canCheckout() {
-        return this.validName && this.validPhone && this.cart.length > 0;
     },
 
     methods: {
         fetchLessons() {
-        this.loading = true;
-        this.loadError = "";
+            this.loading = true;
+            this.loadError = "";
 
-        return fetch("http://localhost:3001/lessons")
+            return fetch(API_URL + "/lessons")
                 .then(function(response) {
                     if (!response.ok) {
                         throw new Error("Could not load lessons.");
@@ -60,10 +74,17 @@ const myApp = Vue.createApp({
                     return response.json();
                 })
                 .then((data) => {
+                    if (!Array.isArray(data)) {
+                        throw new Error(
+                            "The API did not return a lesson array."
+                        );
+                    }
+
                     this.lessons = data;
                 })
                 .catch((error) => {
-                    this.loadError ="Unable to load lessons. Check that the backend is running.";
+                    this.loadError =
+                        "Unable to load lessons. Check the backend connection.";
 
                     console.error(error);
                 })
@@ -71,8 +92,12 @@ const myApp = Vue.createApp({
                     this.loading = false;
                 });
         },
-    
+
         addToCart(lesson) {
+            if (this.isSubmitting || this.submittedOrderId !== "") {
+                return;
+            }
+
             if (lesson.spaces > 0) {
                 this.orderMessage = "";
                 this.cart.push(lesson.id);
@@ -80,36 +105,94 @@ const myApp = Vue.createApp({
             }
         },
 
-        toggleCart(){
+        toggleCart() {
             this.showLessons = !this.showLessons;
         },
 
-        getLesson(lessonId){
+        getLesson(lessonId) {
             return this.lessons.find(function(lesson) {
                 return lesson.id === lessonId;
             });
         },
 
-        removeFromCart(index){
+        removeFromCart(index) {
+            if (this.isSubmitting || this.submittedOrderId !== "") {
+                return;
+            }
+
+            if (index < 0 || index >= this.cart.length) {
+                return;
+            }
+
             const lessonId = this.cart[index];
             const lesson = this.getLesson(lessonId);
 
-            lesson.spaces++;
-            this.cart.splice(index, 1);
+            if (lesson) {
+                lesson.spaces++;
+                this.cart.splice(index, 1);
+            }
         },
 
-        checkout() {
+        async checkout() {
             if (!this.canCheckout) {
                 return;
             }
 
-            this.orderMessage =
-                "Thank you, " + this.customerName.trim() +
-                "! Your order has been confirmed in this demo.";
+            this.isSubmitting = true;
+            this.orderMessage = "";
 
-            this.cart = [];
-            this.customerName = "";
-            this.customerPhone = "";
+            // Combine repeated lesson IDs into quantities.
+            const items = [];
+
+            this.cart.forEach(function(lessonId) {
+                const existingItem = items.find(function(item) {
+                    return item.lessonId === lessonId;
+                });
+
+                if (existingItem) {
+                    existingItem.spaces++;
+                } else {
+                    items.push({
+                        lessonId: lessonId,
+                        spaces: 1
+                    });
+                }
+            });
+
+            const order = {
+                name: this.customerName.trim(),
+                phone: this.customerPhone,
+                items: items
+            };
+
+            try {
+                const response = await fetch(API_URL + "/orders", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify(order)
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(
+                        result.error || "Unable to submit order."
+                    );
+                }
+
+                this.submittedOrderId = result.orderId;
+
+                this.orderMessage =
+                    "Order submitted successfully! Reference: " +
+                    result.orderId;
+            } catch (error) {
+                this.orderMessage = error.message;
+                console.error("Checkout error:", error);
+            } finally {
+                this.isSubmitting = false;
+            }
         }
     }
 });

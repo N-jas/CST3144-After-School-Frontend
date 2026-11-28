@@ -125,7 +125,7 @@
             </p>
 
             <button type="submit" v-bind:disabled="!canCheckout">
-                Checkout
+                {{ isSubmitting ? 'Submitting...' : 'Checkout' }}
             </button>
         </form>
 
